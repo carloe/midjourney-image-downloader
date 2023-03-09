@@ -4,6 +4,8 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Any, Dict
 from pathlib import Path
+import json
+
 
 class DownloadKind(Enum):
     grids = "grids"
@@ -12,13 +14,23 @@ class DownloadKind(Enum):
 
 
 class Parameters():
-    def __init__(self, download_kind: DownloadKind, order_by: str, out_path: Path, date_folders: bool, group_by_month: bool, skip_low_rated: bool):
+    def __init__(
+        self, 
+        download_kind: DownloadKind, 
+        order_by: str, 
+        save_model: bool, 
+        out_path: Path, 
+        date_folders: bool, 
+        group_by_month: bool, 
+        skip_low_rated: bool
+    ):
         self.download_kind = download_kind
         self.date_folders = date_folders
         self.group_by_month = group_by_month
         self.skip_low_rated = skip_low_rated
         self.order_by = order_by
         self.out_path = out_path
+        self.save_model = save_model
 
 
 class Downloader(): 
@@ -28,8 +40,17 @@ class Downloader():
         self._headers = {'User-Agent': self._user_agent }
         self._cookies = {'__Secure-next-auth.session-token': session_token}
 
-    def download(self, download_kind: DownloadKind, order_by: str, out_path: Path, date_folders: bool, group_by_month: bool, skip_low_rated: bool):
-        parameters = Parameters(download_kind, order_by, out_path, date_folders, group_by_month, skip_low_rated)
+    def download(
+        self, 
+        download_kind: DownloadKind, 
+        order_by: str, 
+        save_model: bool, 
+        out_path: Path, 
+        date_folders: bool, 
+        group_by_month: bool, 
+        skip_low_rated: bool
+    ):
+        parameters = Parameters(download_kind, order_by, save_model, out_path, date_folders, group_by_month, skip_low_rated)
         self._paginated_download(parameters)            
 
     def _get_api_page(self, parameters: Parameters, page: int):
@@ -106,7 +127,8 @@ class Downloader():
             return
         else:
             image_path = self._ensure_path_exists(year, month, day, image_id, parameters)
-            full_path = f"{image_path}/{filename}.png"
+            full_path = image_path / f"{filename}.png"
+            json_path = image_path / "model.json"
             for idx, image_url in enumerate(image_paths):
                 if idx > 0:
                     filename = f"{filename[:97]}-{idx}"
@@ -116,8 +138,11 @@ class Downloader():
                 urllib.request.install_opener(opener)
                 urllib.request.urlretrieve(image_url, full_path)
             completed_file_path = image_path / "done"
+            if parameters.save_model is True:
+                with open(json_path, 'w') as outfile:
+                    json.dump(image_json, outfile, indent=4)
             if completed_file_path.is_file():
-                print("File already downloaded... skipping.")
+                return
             else:
                 f = open(completed_file_path, "x")
                 f.close()
