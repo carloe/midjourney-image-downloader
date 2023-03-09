@@ -7,11 +7,13 @@ RUN  apt-get update \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir /code
+RUN mkdir /code \
+  && mkdir /jobs
 WORKDIR /code
 ADD . /code/
 RUN pip install /code
 
 ENV PYTHONPATH "${PYTHONPATH}:/code"
+ENV MJDL_OUT_PATH "/jobs"
 ENTRYPOINT ["python", "src"]
 CMD ["--help"]
