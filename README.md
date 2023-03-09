@@ -22,8 +22,16 @@ Options:
                                   auth.session-token` cookie).  [required]
   -k, --kind [grids|upscales|all]
   -s, --sort-order [new|oldest|hot|rising|top-today|top-week|top-month|top-all|like_count]
-  -o, --out PATH                  Base path where images are saved. [Default:
-                                  pwd]
+                                  Sort order by which to download images.
+                                  [default: new]
+  -m, --save-model                Save the JSON model along with the image.
+                                  [default: True]
+  -d, --date-folders              Save images inside date folders.  [default:
+                                  True]
+  -g, --group-by-month            Group images by month without creating day
+                                  folders.  [default: True]
+  -r, --skip-low-rated            Skip downloading low-rated images.
+  -o, --out PATH                  Base path where images are saved.  [default: pwd]
   --help                          Show this message and exit.
 
 ```
