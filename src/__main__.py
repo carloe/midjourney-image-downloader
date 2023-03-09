@@ -15,13 +15,13 @@ from src import Downloader, DownloadKind
 	"new", "oldest", "hot", "rising", "top-today", "top-week", "top-month", "top-all", "like_count"
 	], case_sensitive=False), default="new", help="Sort order by which to download images."
 )
-@click.option('--save-model', '-m', 'save_model', is_flag=True, show_default=True, default=True, 
+@click.option('--save-models', '-m', 'save_model', is_flag=True, show_default=True, default=False, 
 	help="Save the JSON model along with the image."
 )
-@click.option('--date-folders', '-d', 'date_folders', is_flag=True, show_default=True, default=True, 
+@click.option('--no-date-folders', '-d', 'date_folders', is_flag=True, show_default=True, default=True, 
 	help="Save images inside date folders."
 )
-@click.option('--group-by-month', '-g', 'group_by_month', is_flag=True, show_default=True, default=True, 
+@click.option('--group-by-day', '-g', 'group_by_month', is_flag=True, show_default=True, default=True, 
 	help="Group images by month without creating day folders."
 )
 @click.option('--skip-low-rated', '-r', 'skip_low_rated', is_flag=True, show_default=True, default=False, 
