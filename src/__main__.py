@@ -22,18 +22,24 @@ from src import Downloader, DownloadKind, DownloadAggregation
 @click.option('--save-models', '-m', 'save_model', is_flag=True, show_default=True, default=False, 
 	help="Save the JSON model along with the image."
 )
+@click.option('--save-prompt', '-p', 'save_prompt', is_flag=True, show_default=True, default=False, 
+	help="Save the prompt as `prompt.txt`"
+)
+@click.option('--save-command', '-c', 'save_command', is_flag=True, show_default=True, default=False, 
+	help="Save the full command as `command.txt`"
+)
 @click.option('--skip-low-rated', '-r', 'skip_low_rated', is_flag=True, show_default=True, default=False, 
 	help="Skip downloading low-rated images."
 )
 @click.option('--out', '-o', 'out_path', type=click.Path(path_type=Path), show_default=True, required=False, 
 	default=(Path().absolute() / 'jobs'), help='Base path where images are saved.'
 )
-def cli(user_id: str, kind: str, token: str, sort_oder: str, aggregation: str, save_model: bool, skip_low_rated: bool, out_path: Path):
+def cli(user_id: str, kind: str, token: str, sort_oder: str, aggregation: str, save_model: bool, save_prompt: bool, save_command: bool, skip_low_rated: bool, out_path: Path):
 	downloader = Downloader(user_id, token)
 	download_kind = DownloadKind[kind]
 	aggregate_by = DownloadAggregation[aggregation]
 	click.echo("Starting download...")
-	downloader.download(download_kind, sort_oder, aggregate_by, save_model, out_path, skip_low_rated)
+	downloader.download(download_kind, sort_oder, aggregate_by, save_model, save_prompt, save_command, out_path, skip_low_rated)
 
 if __name__ == "__main__":
 	sys.exit(cli())

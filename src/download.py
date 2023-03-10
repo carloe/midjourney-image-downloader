@@ -26,6 +26,8 @@ class Parameters():
         order_by: str, 
         aggregate_by: DownloadAggregation,
         save_model: bool, 
+        save_prompt: bool,
+        save_command: bool,
         out_path: Path, 
         skip_low_rated: bool
     ):
@@ -34,6 +36,8 @@ class Parameters():
         self.order_by = order_by
         self.out_path = out_path
         self.save_model = save_model
+        self.save_prompt = save_prompt
+        self.save_command = save_command
         self.aggregate_by = aggregate_by
 
 
@@ -50,11 +54,13 @@ class Downloader():
         order_by: str, 
         aggregate_by: DownloadAggregation,
         save_model: bool, 
+        save_prompt: bool,
+        save_command: bool,
         out_path: Path, 
         skip_low_rated: bool
     )  -> None:
         page_index = 1
-        parameters = Parameters(download_kind, order_by, aggregate_by, save_model, out_path, skip_low_rated)
+        parameters = Parameters(download_kind, order_by, aggregate_by, save_model, save_prompt, save_command, out_path, skip_low_rated)
         page_data = self._fetch_api_page(parameters, page_index)
         while page_data:
             if isinstance(page_data, list) and len(page_data) > 0 and "no jobs" in page_data[0].get("msg", "").lower():
@@ -95,7 +101,7 @@ class Downloader():
     def _download_image(self, image_json: List[Dict[str, Any]], parameters: Parameters) -> str:
         image_paths = image_json.get("image_paths", [])
         image_id = image_json.get("id")
-        prompt = image_json.get("prompt")
+
         enqueue_time_str = image_json.get("enqueue_time")
         enqueue_time = datetime.strptime(enqueue_time_str, "%Y-%m-%d %H:%M:%S.%f")
         year = enqueue_time.year
@@ -128,6 +134,16 @@ class Downloader():
                 output_model_path = output_path / "model.json"
                 with open(output_model_path, 'w') as outfile:
                     json.dump(image_json, outfile, indent=4)
+            if parameters.save_prompt is True:
+                prompt = image_json.get("prompt")
+                output_prompt_path = output_path / "prompt.txt"
+                with open(output_prompt_path, 'w') as f:
+                    f.write(prompt)
+            if parameters.save_command is True:
+                command = image_json.get("full_command")
+                output_command_path = output_path / "command.txt"
+                with open(output_command_path, 'w') as f:
+                    f.write(command)
         return filename
 
     @staticmethod

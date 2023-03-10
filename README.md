@@ -33,6 +33,8 @@ Options:
                                   The folder aggregation strategy.  [default:
                                   day]
   -m, --save-models               Save the JSON model along with the image.
+  -p, --save-prompt               Save the prompt as `prompt.txt`
+  -c, --save-command              Save the full command as `command.txt`
   -r, --skip-low-rated            Skip downloading low-rated images.
   -o, --out PATH                  Base path where images are saved.  [default:
                                   `pwd`]
