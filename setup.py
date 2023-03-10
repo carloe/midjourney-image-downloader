@@ -13,7 +13,7 @@ setup(
     name='midjourney-image-downloader',
     version='0.0.1',
     packages=find_packages(),
-    url='',
+    url='https://github.com/carloe/midjourney-image-downloader',
     license='MIT',
     author='Carlo Eugster',
     author_email='carlo@relaun.ch',

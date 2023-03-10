@@ -13,24 +13,28 @@ class DownloadKind(Enum):
     all = "all"
 
 
+class DownloadAggregation(Enum):
+    prompt = "prompt"
+    month = "month"
+    day = "day"
+
+
 class Parameters():
     def __init__(
         self, 
         download_kind: DownloadKind, 
         order_by: str, 
+        aggregate_by: DownloadAggregation,
         save_model: bool, 
         out_path: Path, 
-        date_folders: bool, 
-        group_by_month: bool, 
         skip_low_rated: bool
     ):
         self.download_kind = download_kind
-        self.date_folders = date_folders
-        self.group_by_month = group_by_month
         self.skip_low_rated = skip_low_rated
         self.order_by = order_by
         self.out_path = out_path
         self.save_model = save_model
+        self.aggregate_by = aggregate_by
 
 
 class Downloader(): 
@@ -44,16 +48,24 @@ class Downloader():
         self, 
         download_kind: DownloadKind, 
         order_by: str, 
+        aggregate_by: DownloadAggregation,
         save_model: bool, 
         out_path: Path, 
-        date_folders: bool, 
-        group_by_month: bool, 
         skip_low_rated: bool
-    ):
-        parameters = Parameters(download_kind, order_by, save_model, out_path, date_folders, group_by_month, skip_low_rated)
-        self._paginated_download(parameters)            
+    )  -> None:
+        page_index = 1
+        parameters = Parameters(download_kind, order_by, aggregate_by, save_model, out_path, skip_low_rated)
+        page_data = self._fetch_api_page(parameters, page_index)
+        while page_data:
+            if isinstance(page_data, list) and len(page_data) > 0 and "no jobs" in page_data[0].get("msg", "").lower():
+                print("Reached end of available results")
+                break
+            print(f"Downloading page #{page_index} (order by '{parameters.order_by}')")
+            self._download_page(page_data, parameters)
+            page_index += 1
+            page_data = self._fetch_api_page(parameters, page_index)           
 
-    def _get_api_page(self, parameters: Parameters, page: int):
+    def _fetch_api_page(self, parameters: Parameters, page: int) -> List[Dict[str, Any]]:
         api_url = "https://www.midjourney.com/api/app/recent-jobs/" \
                   f"?orderBy={parameters.order_by}&jobStatus=completed&userId={self._user_id}" \
                   f"&dedupe=true&refreshApi=0&amount=50&page={page}"
@@ -74,38 +86,13 @@ class Downloader():
             print(f'HTTP Request failed: {e}')
 
 
-    def _download_page(self, page_json, parameters: Parameters):
+    def _download_page(self, page_json, parameters: Parameters) -> None:
         for idx, image_json in enumerate(page_json):
-            filename = self._save_prompt(image_json, parameters)
+            filename = self._download_image(image_json, parameters)
             if filename:
                 print(f"{idx+1}/{len(page_json)} Downloaded {filename}")
 
-
-    def _ensure_path_exists(self, year, month, day, image_id, parameters: Parameters):
-        if parameters.date_folders:
-            if parameters.group_by_month:
-                date_path = parameters.out_path / f"{year}/{month}/{image_id}"
-                try: 
-                    date_path.mkdir(parents=True, exist_ok=False)
-                except FileExistsError:
-                    pass
-                return date_path
-            else:
-                date_path = parameters.out_path / f"{year}/{month}/{day}/{image_id}"
-                try: 
-                    date_path.mkdir(parents=True, exist_ok=False)
-                except FileExistsError:
-                    pass
-                return date_path
-        else:
-            image_path = parameters.out_path / f"{image_id}"
-            try: 
-                image_path.mkdir(parents=True, exist_ok=False)
-            except FileExistsError:
-                pass
-            return image_path
-
-    def _save_prompt(self, image_json: List[Dict[str, Any]], parameters: Parameters):
+    def _download_image(self, image_json: List[Dict[str, Any]], parameters: Parameters) -> str:
         image_paths = image_json.get("image_paths", [])
         image_id = image_json.get("id")
         prompt = image_json.get("prompt")
@@ -115,49 +102,61 @@ class Downloader():
         month = enqueue_time.month
         day = enqueue_time.day
 
-        filename = prompt.replace(" ", "_").replace(",", "").replace("*", "").replace("'", "").replace(":", "").replace(
-            "__", "_").replace("<", "").replace(">", "").replace("/", "").replace(".", "").lower().strip("_*")[:100]
+        filename = self._filename_for(parameters, image_json)
+        output_path = self._output_path_for(parameters, image_json)
 
         ranking_by_user = image_json.get("ranking_by_user")
         if parameters.skip_low_rated and ranking_by_user and isinstance(ranking_by_user, int) and (ranking_by_user in [1, 2]):
             return
-        elif Path(f"{year}/{month}/{image_id}/done").is_file() or \
-                Path(f"{year}/{month}/{day}/{image_id}/done").is_file() or \
-                Path(f"{image_id}/done").is_file():
+        elif self._local_data_exists(output_path, filename):
+            print(f"Image {filename}.png exists. Skipping.")
             return
         else:
-            image_path = self._ensure_path_exists(year, month, day, image_id, parameters)
-            full_path = image_path / f"{filename}.png"
-            json_path = image_path / "model.json"
+            try: 
+                output_path.mkdir(parents=True, exist_ok=False)
+            except FileExistsError:
+                pass
             for idx, image_url in enumerate(image_paths):
                 if idx > 0:
-                    filename = f"{filename[:97]}-{idx}"
-                    full_path = f"{image_path}/{filename}.png"
+                    filename = f"{filename}-{idx}"
+                full_path = f"{output_path}/{filename}.png"
                 opener = urllib.request.build_opener()
                 opener.addheaders = [('User-agent', self._user_agent)]
                 urllib.request.install_opener(opener)
                 urllib.request.urlretrieve(image_url, full_path)
-            completed_file_path = image_path / "done"
             if parameters.save_model is True:
-                with open(json_path, 'w') as outfile:
+                output_model_path = output_path / "model.json"
+                with open(output_model_path, 'w') as outfile:
                     json.dump(image_json, outfile, indent=4)
-            if completed_file_path.is_file():
-                return
-            else:
-                f = open(completed_file_path, "x")
-                f.close()
-        return full_path
+        return filename
 
+    @staticmethod
+    def _local_data_exists(path: Path, filename: str) -> bool:
+        full_path = path / f'{filename}.png'
+        return full_path.is_file()
 
-    def _paginated_download(self, parameters: Parameters):
-        page = 1
-        page_of_results = self._get_api_page(parameters, page)
-        while page_of_results:
-            if isinstance(page_of_results, list) and len(page_of_results) > 0 and "no jobs" in page_of_results[0].get("msg", "").lower():
-                print("Reached end of available results")
-                break
+    @staticmethod
+    def _output_path_for(parameters: Parameters, image_json: List[Dict[str, Any]]) -> Path:
+        prompt = image_json.get("prompt")
+        enqueue_time_str = image_json.get("enqueue_time")
+        enqueue_time = datetime.strptime(enqueue_time_str, "%Y-%m-%d %H:%M:%S.%f")
+        year = enqueue_time.year
+        month = enqueue_time.month
+        day = enqueue_time.day
+        match parameters.aggregate_by:
+            case DownloadAggregation.prompt:
+                sanitized = prompt.replace(" ", "_").replace(",", "").replace("*", "").replace("'", "").replace(":", "").replace(
+                    "__", "_").replace("<", "").replace(">", "").replace("/", "").replace(".", "").lower().strip("_*")[:100]
+                return parameters.out_path / sanitized
+            case DownloadAggregation.month:
+                return parameters.out_path / f"{year}/{month}"
+            case DownloadAggregation.day:
+                return parameters.out_path / f"{year}/{month}/{day}"
 
-            print(f"Downloading page #{page} (order by '{parameters.order_by}')")
-            self._download_page(page_of_results, parameters)
-            page += 1
-            page_of_results = self._get_api_page(parameters, page)
+    @staticmethod
+    def _filename_for(parameters: Parameters, image_json: List[Dict[str, Any]]) -> str:
+        if (parameters.aggregate_by == DownloadAggregation.day or parameters.aggregate_by == DownloadAggregation.month):
+            prompt = image_json.get("prompt")
+            return prompt.replace(" ", "_").replace(",", "").replace("*", "").replace("'", "").replace(":", "").replace(
+                "__", "_").replace("<", "").replace(">", "").replace("/", "").replace(".", "").lower().strip("_*")[:97]
+        return image_json.get("id")

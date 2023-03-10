@@ -1,2 +1,2 @@
 # -*- coding: utf-8 -*-
-from .download import Downloader, DownloadKind
+from .download import Downloader, DownloadKind, DownloadAggregation
