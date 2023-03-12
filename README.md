@@ -80,7 +80,7 @@ $ export MJDL_TOKEN="<some_token>"
 $ export MJDL_USER_ID="<some_user_id>"
 
 # Now run the command without passing those args...
-$ mjdk --kind upscales
+$ mjdl --kind upscales
 
 # Or with docker...
 $ docker run --rm \
