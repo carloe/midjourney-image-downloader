@@ -36,8 +36,8 @@ Options:
   -p, --save-prompt               Save the prompt as `prompt.txt`
   -c, --save-command              Save the full command as `command.txt`
   -r, --skip-low-rated            Skip downloading low-rated images.
-  -o, --out PATH                  Base path where images are saved.  [default:
-                                  `pwd`]
+  -o, --out PATH                  Base path where images are saved.  [default: `pwd`]
+  --stop-id TEXT                  Stop when reaching image with ID.
   --help                          Show this message and exit.
 ```
 

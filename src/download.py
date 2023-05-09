@@ -5,7 +5,8 @@ from enum import Enum
 from typing import List, Any, Dict
 from pathlib import Path
 import json
-
+from typing import Optional
+import click
 
 class DownloadKind(Enum):
     grids = "grids"
@@ -21,15 +22,16 @@ class DownloadAggregation(Enum):
 
 class Parameters():
     def __init__(
-        self, 
-        download_kind: DownloadKind, 
-        order_by: str, 
+        self,
+        download_kind: DownloadKind,
+        order_by: str,
         aggregate_by: DownloadAggregation,
-        save_model: bool, 
+        save_model: bool,
         save_prompt: bool,
         save_command: bool,
-        out_path: Path, 
-        skip_low_rated: bool
+        out_path: Path,
+        skip_low_rated: bool,
+        stop_id: Optional[str] = None,
     ):
         self.download_kind = download_kind
         self.skip_low_rated = skip_low_rated
@@ -39,6 +41,7 @@ class Parameters():
         self.save_prompt = save_prompt
         self.save_command = save_command
         self.aggregate_by = aggregate_by
+        self.stop_id = stop_id
 
 
 class Downloader(): 
@@ -57,19 +60,22 @@ class Downloader():
         save_prompt: bool,
         save_command: bool,
         out_path: Path, 
-        skip_low_rated: bool
+        skip_low_rated: bool,
+        stop_id: Optional[str] = None,
     )  -> None:
         page_index = 1
-        parameters = Parameters(download_kind, order_by, aggregate_by, save_model, save_prompt, save_command, out_path, skip_low_rated)
+        parameters = Parameters(download_kind, order_by, aggregate_by, save_model, save_prompt, save_command, out_path, skip_low_rated, stop_id)
         page_data = self._fetch_api_page(parameters, page_index)
-        while page_data:
+        stopped = False
+        while page_data and stopped == False:
             if isinstance(page_data, list) and len(page_data) > 0 and "no jobs" in page_data[0].get("msg", "").lower():
-                print("Reached end of available results")
+                click.echo("Reached end of available results")
                 break
-            print(f"Downloading page #{page_index} (order by '{parameters.order_by}')")
-            self._download_page(page_data, parameters)
-            page_index += 1
-            page_data = self._fetch_api_page(parameters, page_index)           
+            click.echo(f"Downloading page #{page_index} (order by '{parameters.order_by}')")
+            stopped = self._download_page(page_data, parameters)
+            if not stopped:
+                page_index += 1
+                page_data = self._fetch_api_page(parameters, page_index)
 
     def _fetch_api_page(self, parameters: Parameters, page: int) -> List[Dict[str, Any]]:
         api_url = "https://www.midjourney.com/api/app/recent-jobs/" \
@@ -89,34 +95,30 @@ class Downloader():
             result = response.json()
             return result
         except requests.exceptions.RequestException as e:
-            print(f'HTTP Request failed: {e}')
+            click.echo(f'HTTP Request failed: {e}')
 
 
-    def _download_page(self, page_json, parameters: Parameters) -> None:
+    def _download_page(self, page_json, parameters: Parameters) -> bool:
         for idx, image_json in enumerate(page_json):
+            if parameters.stop_id and image_json.get("id") == parameters.stop_id:
+                click.echo(f"Reached stop ID {parameters.stop_id}. Stopping.")
+                return True
             filename = self._download_image(image_json, parameters)
             if filename:
-                print(f"{idx+1}/{len(page_json)} Downloaded {filename}")
+                click.echo(f"{idx+1}/{len(page_json)} Downloaded {filename}")
+        return False
 
-    def _download_image(self, image_json: List[Dict[str, Any]], parameters: Parameters) -> str:
+    def _download_image(self, image_json: List[Dict[str, Any]], parameters: Parameters) -> Optional[str]:
         image_paths = image_json.get("image_paths", [])
-        image_id = image_json.get("id")
-
-        enqueue_time_str = image_json.get("enqueue_time")
-        enqueue_time = datetime.strptime(enqueue_time_str, "%Y-%m-%d %H:%M:%S.%f")
-        year = enqueue_time.year
-        month = enqueue_time.month
-        day = enqueue_time.day
-
         filename = self._filename_for(parameters, image_json)
         output_path = self._output_path_for(parameters, image_json)
 
         ranking_by_user = image_json.get("ranking_by_user")
         if parameters.skip_low_rated and ranking_by_user and isinstance(ranking_by_user, int) and (ranking_by_user in [1, 2]):
-            return
+            return None
         elif self._local_data_exists(output_path, filename):
-            print(f"Image {filename}.png exists. Skipping.")
-            return
+            click.echo(f"Image {filename}.png exists. Skipping.")
+            return None
         else:
             try: 
                 output_path.mkdir(parents=True, exist_ok=False)
